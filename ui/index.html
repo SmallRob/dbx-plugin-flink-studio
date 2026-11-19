@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flink Studio</title>
+<style id="dbx-host-theme-bridge">
+:root{
+  color-scheme:dark;
+  --background:var(--color-background,#131416);
+  --foreground:var(--color-foreground,#d7d7db);
+  --muted:var(--color-muted,#2a2a2d);
+  --muted-foreground:var(--color-muted-foreground,#97989d);
+  --accent:var(--color-accent,#2e2f33);
+  --accent-foreground:var(--color-accent-foreground,#dddde2);
+  --border:var(--color-border,rgba(110,110,114,.28));
+  --primary:var(--color-primary,#3b82f6);
+  --primary-foreground:var(--color-primary-foreground,#fff);
+  --destructive:var(--color-destructive,#ef4444);
+  --success:var(--color-success,rgb(74 222 128));
+  --warning:var(--color-warning,rgb(251 191 36));
+  --ui-font:var(--font-sans,Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif);
+  --mono:var(--font-mono,"Cascadia Mono",Consolas,monospace);
+  --radius:var(--radius-md,6px);
+}
+</style>
+<style>
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--background);color:var(--foreground);font-family:var(--ui-font);font-size:13px;overflow:hidden}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+.app{display:flex;flex-direction:column;height:100%;background:var(--background)}
+/* ---- top accent line: subtle 3-color gradient (orange→blue→violet) ---- */
+.app:before{content:"";position:absolute;top:0;left:0;right:0;height:2px;z-index:5;
+  background:linear-gradient(90deg,#fb923c 0%,#fde047 18%,#38bdf8 45%,#6366f1 72%,#f0abfc 100%);opacity:.9}
+.toolbar{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 6%,var(--background)),var(--background));flex:0 0 auto}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.2px}
+.brand .logo{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;
+  background:linear-gradient(135deg,#1e3a8a,#2563eb 45%,#0ea5e9);color:#fff;font-size:10px;font-weight:800;
+  box-shadow:0 2px 10px rgba(37,99,235,.35)}
+.conn-pill{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--muted);font-family:var(--mono);font-size:12px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 18%,transparent)}
+.dot.off{background:var(--destructive);box-shadow:0 0 0 3px color-mix(in srgb,var(--destructive) 18%,transparent)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted-foreground);font-size:11px}
+.badge.ro{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 35%,transparent);background:color-mix(in srgb,var(--warning) 10%,transparent)}
+.badge.rest{color:#38bdf8;border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.09)}
+.spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--accent);color:var(--accent-foreground);cursor:pointer;white-space:nowrap;transition:all .15s}
+.btn:hover{border-color:var(--primary);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn.primary{background:linear-gradient(135deg,var(--primary),color-mix(in srgb,var(--primary) 60%,#38bdf8));color:var(--primary-foreground);border-color:transparent}
+.btn.sm{padding:3px 9px;font-size:12px}
+.tabbar{display:flex;align-items:stretch;gap:1px;height:36px;padding:0 8px;border-bottom:1px solid var(--border);flex:0 0 auto;overflow-x:auto;
+  background:color-mix(in srgb,var(--muted) 40%,transparent)}
+.tab{position:relative;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border:0;border-bottom:2px solid transparent;
+  background:transparent;color:var(--muted-foreground);cursor:pointer;white-space:nowrap;transition:color .15s,background .15s}
+.tab:hover{color:var(--foreground);background:var(--accent)}
+.tab.active{color:var(--foreground);font-weight:650}
+.tab.active:after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;
+  background:linear-gradient(90deg,#fb923c,#38bdf8,#a78bfa)}
+.tab .ic{font-size:13px;opacity:.85}
+.panes{display:flex;flex:1;min-height:0}
+.tree{width:250px;flex:0 0 250px;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;
+  background:color-mix(in srgb,var(--muted) 25%,transparent)}
+.tree-head{display:flex;align-items:center;gap:6px;padding:9px 10px;border-bottom:1px solid var(--border);font-size:12px;
+  font-weight:600;color:var(--muted-foreground);letter-spacing:.3px;text-transform:uppercase}
+.tree-head .count{margin-left:auto;font-family:var(--mono);color:var(--primary);text-transform:none}
+.filter{margin:9px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);outline:none;width:calc(100% - 18px);transition:border-color .15s}
+.filter:focus{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 15%,transparent)}
+.tree-list{overflow:auto;flex:1;padding:0 6px 8px}
+.tree-item{display:flex;align-items:center;gap:8px;padding:7px 9px;margin:2px 0;border-radius:var(--radius);cursor:pointer;color:var(--muted-foreground);transition:all .12s}
+.tree-item:hover{background:var(--accent);color:var(--foreground)}
+.tree-item.active{background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 20%,var(--accent)),color-mix(in srgb,var(--primary) 8%,var(--accent)));
+  color:var(--foreground);border-left:2px solid var(--primary);padding-left:7px}
+.tree-item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.pill{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid var(--border);color:var(--muted-foreground)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.main-head{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 4%,var(--background)),transparent)}
+.main-head h2{margin:0;font-size:15px;font-weight:700;background:linear-gradient(90deg,var(--foreground),color-mix(in srgb,var(--primary) 70%,var(--foreground)));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.main-body{flex:1;overflow:auto;padding:16px}
+.grid{display:grid;gap:13px}
+.cards{grid-template-columns:repeat(auto-fill,minmax(155px,1fr))}
+.card{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:9px;padding:14px 14px 13px;
+  background:linear-gradient(145deg,var(--muted),color-mix(in srgb,var(--primary) 4%,var(--muted)));
+  transition:transform .16s,box-shadow .16s,border-color .16s}
+.card:before{content:"";position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,#fb923c,#38bdf8,#a78bfa);opacity:.75}
+.card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--primary) 45%,var(--border));box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.card .k{color:var(--muted-foreground);font-size:11px;letter-spacing:.2px}
+.card .v{font-size:22px;font-weight:750;margin-top:5px;font-family:var(--mono);
+  background:linear-gradient(135deg,var(--foreground),color-mix(in srgb,var(--primary) 75%,var(--foreground)));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.card .v .state{-webkit-text-fill-color:initial}
+.card h3,.section-title{margin:18px 0 9px;font-size:13px;font-weight:650;color:var(--foreground);display:flex;align-items:center;gap:7px}
+.card h3:before,.section-title:before{content:"";width:3px;height:13px;border-radius:2px;background:linear-gradient(180deg,#fb923c,#38bdf8)}
+table{border-collapse:collapse;width:100%;font-size:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+th{color:var(--muted-foreground);font-weight:650;position:sticky;top:0;z-index:1;letter-spacing:.2px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 9%,var(--background)),var(--background))}
+tr:hover td{background:color-mix(in srgb,var(--primary) 7%,var(--accent))}
+td.num{font-family:var(--mono);text-align:right}
+.op{font-family:var(--mono);font-weight:750;padding:2px 6px;border-radius:5px;font-size:11px;letter-spacing:.3px}
+.op.add{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);border:1px solid color-mix(in srgb,var(--success) 28%,transparent)}
+.op.upd{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent);border:1px solid color-mix(in srgb,var(--warning) 28%,transparent)}
+.op.del{color:var(--destructive);background:color-mix(in srgb,var(--destructive) 14%,transparent);border:1px solid color-mix(in srgb,var(--destructive) 28%,transparent)}
+.state{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border)}
+.state.RUNNING{color:var(--success);border-color:color-mix(in srgb,var(--success) 40%,transparent);background:color-mix(in srgb,var(--success) 10%,transparent)}
+.state.FINISHED{color:var(--muted-foreground)}
+.state.FAILED,.state.CANCELED{color:var(--destructive);border-color:color-mix(in srgb,var(--destructive) 40%,transparent);background:color-mix(in srgb,var(--destructive) 10%,transparent)}
+.empty{padding:48px 24px;text-align:center;color:var(--muted-foreground);line-height:1.8}
+.empty .mark{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:14px;margin-bottom:12px;
+  background:linear-gradient(135deg,rgba(251,146,60,.14),rgba(56,189,248,.14),rgba(167,139,250,.14));font-size:20px}
+.err{padding:10px 12px;border:1px solid var(--destructive);border-radius:var(--radius);color:var(--destructive);
+  background:color-mix(in srgb,var(--destructive) 9%,transparent);margin-bottom:12px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.mono{font-family:var(--mono)}
+.small{color:var(--muted-foreground);font-size:11px}
+a{color:var(--primary)}
+select.conn-sel{max-width:220px;padding:5px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--muted);outline:none}
+select.conn-sel:focus{border-color:var(--primary)}
+.hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:7px 11px;border-radius:var(--radius);
+  background:color-mix(in srgb,var(--primary) 7%,transparent);border:1px solid color-mix(in srgb,var(--primary) 18%,transparent);font-size:11px;color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar">
+    <div class="brand"><span class="logo">FL</span><span>Flink Studio</span></div>
+    <select id="connSel" class="conn-sel" title="选择连接"></select>
+    <span class="conn-pill"><span id="connDot" class="dot off"></span><span id="connAddr">未连接</span></span>
+    <span class="badge ro">只读</span>
+    <span class="badge rest">REST</span>
+    <div class="spacer"></div>
+    <span id="ver" class="small"></span>
+    <button id="btnRefresh" class="btn sm" title="刷新当前页">↻ 刷新</button>
+  </div>
+  <div class="tabbar" id="tabbar"></div>
+  <div class="panes">
+    <aside class="tree" id="treePane">
+      <div class="tree-head"><span id="treeTitle">对象</span><span class="count" id="treeCount"></span></div>
+      <input id="filter" class="filter" placeholder="过滤…" />
+      <div class="tree-list" id="treeList"></div>
+    </aside>
+    <main class="main">
+      <div class="main-head"><h2 id="paneTitle">概览</h2><span id="paneMeta" class="small"></span><div class="spacer"></div><div id="paneActions"></div></div>
+      <div class="main-body" id="paneBody"><div class="empty">正在连接…</div></div>
+    </main>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var bridge=null, connId="", conns=[], overview=null;
+  var activeTab="overview", selectedJob="", selectedTM="", selectedLog="";
+  var TABS=[
+    {id:"overview",label:"概览",tree:false,ic:"◎"},
+    {id:"jobs",label:"作业",tree:true,ic:"◆"},
+    {id:"messages",label:"消费内容",tree:true,ic:"▤"},
+    {id:"taskmanagers",label:"TaskManager",tree:true,ic:"▦"},
+    {id:"config",label:"配置",tree:false,ic:"⚙"}
+  ];
+  var $=function(id){return document.getElementById(id);};
+
+  function invoke(method,params){ if(!bridge) return Promise.reject(new Error("NOT_IN_DBX_HOST")); return bridge.invoke(method,params||{},{timeoutMs:30000}); }
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function fmtBytes(n){n=Number(n)||0;if(n<1024)return n+" B";var u=["KB","MB","GB","TB"],i=-1;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(1)+" "+u[i];}
+  function fmtTime(ms){if(!ms)return "—";try{return new Date(Number(ms)).toLocaleString("zh-CN",{hour12:false});}catch(e){return String(ms);}}
+
+  function renderTabs(){
+    $("tabbar").innerHTML=TABS.map(function(t){return '<button class="tab'+(t.id===activeTab?" active":"")+'" data-tab="'+t.id+'"><span class="ic">'+t.ic+'</span>'+esc(t.label)+'</button>';}).join("");
+    Array.prototype.forEach.call($("tabbar").querySelectorAll(".tab"),function(b){b.onclick=function(){switchTab(b.dataset.tab);};});
+  }
+  function switchTab(id){
+    activeTab=id;renderTabs();
+    var t=TABS.filter(function(x){return x.id===id;})[0];
+    $("treePane").style.display=t&&t.tree?"flex":"none";
+    $("treeTitle").textContent=id==="jobs"?"作业列表":id==="messages"?"日志文件":"TaskManager";
+    $("paneTitle").textContent=t?t.label:id;
+    loadPane();
+  }
+
+  function connParams(){return {connection_id:connId};}
+
+  function setConnLabel(){
+    if(!connId){$("connAddr").textContent="未连接";$("connDot").className="dot off";return;}
+    var c=conns.filter(function(x){return x.id===connId;})[0];
+    var name=c?(c.name||c.label||c.id):connId;
+    $("connAddr").textContent=name;
+    $("connDot").className="dot";
+  }
+
+  function boot(){return (async function(){
+    if(!window.dbxPlugin){$("paneBody").innerHTML='<div class="err">未检测到 DBX 宿主桥接。请在插件中心打开工作台。</div>';return;}
+    bridge=window.dbxPlugin;
+    await bridge.ready;
+    try{conns=await bridge.getConnections();}catch(e){conns=[];}
+    if(!Array.isArray(conns))conns=[];
+    var ctx=bridge.context||{};
+    connId=ctx.connectionId||(conns[0]&&conns[0].id)||"";
+    var sel=$("connSel");
+    sel.innerHTML=conns.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name||c.id)+'</option>';}).join("")||'<option value="'+esc(connId)+'">'+esc(connId||"当前连接")+'</option>';
+    sel.value=connId;
+    sel.onchange=function(){connId=sel.value;selectedJob="";selectedTM="";selectedLog="";overview=null;setConnLabel();loadPane();};
+    setConnLabel();
+    bridge.onContext(function(c){if(c&&c.connectionId&&c.connectionId!==connId){connId=c.connectionId;sel.value=connId;setConnLabel();loadPane();}});
+    try{var info=await invoke("flink/ping",{});$("ver").textContent="sidecar "+(info.plugin||"");}catch(e){}
+    renderTabs();switchTab("overview");
+  })().catch(function(e){$("paneBody").innerHTML='<div class="err">初始化失败：'+esc(e&&e.message||e)+'</div>';});}
+
+  function loadPane(){
+    if(!connId||!bridge){$("paneBody").innerHTML='<div class="empty">无可用连接。请先在连接树中创建 Flink 连接。</div>';return;}
+    $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 加载中…</div>';
+    $("paneActions").innerHTML="";
+    if(activeTab==="overview")return loadOverview();
+    if(activeTab==="jobs")return loadJobs();
+    if(activeTab==="messages")return loadMessagesTree();
+    if(activeTab==="taskmanagers")return loadTMs();
+    if(activeTab==="config")return loadConfig();
+  }
+
+  async function loadOverview(){
+    try{
+      var ov=await invoke("flink/overview",connParams());overview=ov;
+      var cards=[
+        ["Flink 版本",ov["flink-version"]||"—"],["TaskManagers",ov.taskmanagers??"—"],
+        ["可用 Slots",ov["slots-available"]??"—"],["总 Slots",ov["slots-total"]??"—"],
+        ["运行中作业",ov["jobs-running"]??"—"],["已完成作业",ov["jobs-finished"]??"—"],
+        ["失败作业",ov["jobs-failed"]??"—"]
+      ];
+      $("paneMeta").textContent="";
+      $("paneBody").innerHTML='<div class="grid cards">'+cards.map(function(c){return '<div class="card"><div class="k">'+esc(c[0])+'</div><div class="v">'+esc(c[1])+'</div></div>';}).join("")+'</div>'+
+        '<div class="hint">◎ 数据源：JobManager REST <span class="mono">/overview</span> · 点击右上角刷新可重新拉取</div>';
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+
+  var jobsCache=[];
+  async function loadJobs(){
+    try{
+      var r=await invoke("flink/jobs",connParams());jobsCache=(r&&r.jobs)||[];
+      renderJobTree();
+      if(!selectedJob&&jobsCache.length)selectedJob=jobsCache[0].id;
+      if(selectedJob)return showJob(selectedJob);
+      $("paneBody").innerHTML='<div class="empty"><div class="mark">◆</div>暂无作业</div>';
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+  function renderJobTree(){
+    var q=($("filter").value||"").toLowerCase();
+    var rows=jobsCache.filter(function(j){return !q||String(j.id).toLowerCase().indexOf(q)>=0;});
+    $("treeCount").textContent=rows.length+"/"+jobsCache.length;
+    $("treeList").innerHTML=rows.map(function(j){return '<div class="tree-item'+(j.id===selectedJob?" active":"")+'" data-job="'+esc(j.id)+'"><span class="name" title="'+esc(j.id)+'">'+esc(j.id.slice(0,12))+'…</span><span class="state '+esc(j.status)+'">'+esc(j.status)+'</span></div>';}).join("")||'<div class="empty">无作业</div>';
+    Array.prototype.forEach.call($("treeList").querySelectorAll("[data-job]"),function(el){el.onclick=function(){selectedJob=el.dataset.job;renderJobTree();showJob(selectedJob);};});
+  }
+  async function showJob(id){
+    $("paneMeta").textContent=esc(id);
+    $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 加载作业详情…</div>';
+    try{
+      var j=await invoke("flink/job",Object.assign(connParams(),{jobId:id}));
+      var tasks=(j.vertices||[]).map(function(v){return [v.name,v.parallelism,v.status,(v.metrics&&v.metrics["read-bytes"])||"0"];});
+      $("paneBody").innerHTML=
+        '<div class="grid cards">'+
+          '<div class="card"><div class="k">状态</div><div class="v"><span class="state '+esc(j.state)+'">'+esc(j.state)+'</span></div></div>'+
+          '<div class="card"><div class="k">启动时间</div><div class="v" style="font-size:14px">'+esc(fmtTime(j["start-time"]||j.startTime))+'</div></div>'+
+          '<div class="card"><div class="k">Job ID</div><div class="v" style="font-size:13px">'+esc(id)+'</div></div>'+
+        '</div>'+
+        '<h3 class="section-title">算子 / 顶点</h3>'+
+        '<table><thead><tr><th>名称</th><th>并行度</th><th>状态</th><th>读取字节</th></tr></thead><tbody>'+
+        tasks.map(function(t){return '<tr><td>'+esc(t[0])+'</td><td>'+esc(t[1])+'</td><td>'+esc(t[2])+'</td><td class="num">'+esc(t[3])+'</td></tr>';}).join("")+
+        '</tbody></table>';
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+
+  var tmCache=[];
+  async function loadTMs(){
+    try{
+      var r=await invoke("flink/taskmanagers",connParams());tmCache=(r&&r.taskmanagers)||[];
+      var q=($("filter").value||"").toLowerCase();
+      var rows=tmCache.filter(function(t){return !q||String(t.id).toLowerCase().indexOf(q)>=0;});
+      $("treeCount").textContent=rows.length+"/"+tmCache.length;
+      $("treeList").innerHTML=rows.map(function(t){return '<div class="tree-item'+(t.id===selectedTM?" active":"")+'" data-tm="'+esc(t.id)+'"><span class="name" title="'+esc(t.id)+'">'+esc(t.id)+'</span></div>';}).join("")||'<div class="empty">无 TaskManager</div>';
+      Array.prototype.forEach.call($("treeList").querySelectorAll("[data-tm]"),function(el){el.onclick=function(){selectedTM=el.dataset.tm;loadTMs();};});
+      if(!selectedTM&&tmCache.length)selectedTM=tmCache[0].id;
+      if(selectedTM)return showTM(selectedTM);
+      $("paneBody").innerHTML='<div class="empty"><div class="mark">▦</div>暂无 TaskManager</div>';
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+  async function showTM(id){
+    $("paneMeta").textContent=esc(id);
+    var t=tmCache.filter(function(x){return x.id===id;})[0]||{};
+    $("paneBody").innerHTML='<div class="grid cards">'+
+      [["Slots",t.totalSlots??"—"],["空闲 Slots",t.freeSlots??"—"],["CPU 核数",t.cpuCores??"—"],
+       ["总内存",fmtBytes(t.memoryTotal)],["JVM 堆已用",fmtBytes(t.heapUsed)],["最后心跳",fmtTime(t.lastHeartbeat)]]
+      .map(function(c){return '<div class="card"><div class="k">'+esc(c[0])+'</div><div class="v" style="font-size:16px">'+esc(c[1])+'</div></div>';}).join("")+'</div>';
+    try{
+      var lr=await invoke("flink/taskmanager-logs",Object.assign(connParams(),{taskManager:id}));
+      var logs=(lr&&lr.logs)||[];
+      $("paneBody").innerHTML+='<h3 class="section-title">日志文件</h3><table><thead><tr><th>文件名</th><th>大小</th><th></th></tr></thead><tbody>'+
+        logs.map(function(l){return '<tr><td class="mono">'+esc(l.name)+'</td><td class="num">'+fmtBytes(l.size)+'</td><td><button class="btn sm" data-log="'+esc(l.name)+'">查看</button></td></tr>';}).join("")+'</tbody></table>';
+      Array.prototype.forEach.call($("paneBody").querySelectorAll("[data-log]"),function(el){el.onclick=function(){showLogFile(id,el.dataset.log);};});
+    }catch(e){$("paneBody").innerHTML+='<div class="err" style="margin-top:12px">日志列表加载失败：'+esc(e&&e.message||e)+'</div>';}
+  }
+  async function showLogFile(tm,file){
+    $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 读取 '+esc(file)+' …</div>';
+    try{
+      var r=await invoke("flink/logfile",Object.assign(connParams(),{taskManager:tm,fileName:file}));
+      $("paneBody").innerHTML='<div class="small mono" style="margin-bottom:8px">'+esc(tm)+' / '+esc(file)+'</div><pre class="mono" style="white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5">'+esc(r.content||"")+'</pre>';
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+
+  async function loadMessagesTree(){
+    try{
+      var r=await invoke("flink/taskmanagers",connParams());tmCache=(r&&r.taskmanagers)||[];
+      var q=($("filter").value||"").toLowerCase();
+      var rows=tmCache.filter(function(t){return !q||String(t.id).toLowerCase().indexOf(q)>=0;});
+      $("treeCount").textContent=rows.length+"/"+tmCache.length;
+      $("treeList").innerHTML='<div class="tree-item'+(selectedTM===""?" active":"")+'" data-tm=""><span class="name">全部 TaskManagers</span></div>'+
+        rows.map(function(t){return '<div class="tree-item'+(t.id===selectedTM?" active":"")+'" data-tm="'+esc(t.id)+'"><span class="name">'+esc(t.id)+'</span></div>';}).join("");
+      Array.prototype.forEach.call($("treeList").querySelectorAll("[data-tm]"),function(el){el.onclick=function(){selectedTM=el.dataset.tm;loadMessagesTree();showMessages();};});
+      return showMessages();
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+  async function showMessages(){
+    $("paneMeta").textContent=selectedTM||"全部 TM";
+    $("paneActions").innerHTML='<label class="small">条数 <select id="limitSel"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select></label>';
+    $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 扫描 print-sink 日志…</div>';
+    try{
+      var limit=parseInt(($("limitSel")&&$("limitSel").value)||"200",10);
+      var p=Object.assign(connParams(),{limit:limit});
+      if(selectedTM)p.taskManager=selectedTM;
+      var r=await invoke("flink/messages",p);
+      var rows=r.rows||[];
+      $("paneMeta").textContent=(selectedTM||"全部 TM")+" · "+r.total+" 行 / 扫描 "+r.filesScanned+" 个日志文件";
+      if(!rows.length){$("paneBody").innerHTML='<div class="empty"><div class="mark">▤</div>未发现 print-sink 消费记录。<br/><span class="small">在 Flink SQL 中使用 <span class="mono">INSERT INTO sink_print SELECT …</span>（print connector）后，消费结果会写入 TaskManager stdout，插件在此读取。</span></div>';return;}
+      var maxCells=rows.reduce(function(m,x){return Math.max(m,x.cells.length);},0);
+      $("paneBody").innerHTML='<table><thead><tr><th>操作</th>'+Array.apply(null,Array(maxCells)).map(function(_,i){return '<th>列 '+(i+1)+'</th>';}).join("")+'<th>TaskManager</th></tr></thead><tbody>'+
+        rows.map(function(row){
+          var opCls=row.op.indexOf("+I")>=0?"add":row.op.indexOf("+U")>=0?"upd":row.op.indexOf("-D")>=0?"del":"upd";
+          return '<tr><td><span class="op '+opCls+'">'+esc(row.op)+'</span></td>'+
+            Array.apply(null,Array(maxCells)).map(function(_,i){return '<td>'+esc(row.cells[i]||"")+'</td>';}).join("")+
+            '<td class="small">'+esc(String(row.taskManager||"").slice(0,18))+'</td></tr>';
+        }).join("")+'</tbody></table>';
+      var ls=$("limitSel");if(ls)ls.onchange=showMessages;
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+
+  async function loadConfig(){
+    try{
+      var r=await invoke("flink/config",connParams());
+      var rows=Array.isArray(r)?r:(r&&r.config)||[];
+      var q=($("filter").value||"").toLowerCase();
+      if(q)rows=rows.filter(function(x){return JSON.stringify(x).toLowerCase().indexOf(q)>=0;});
+      $("paneMeta").textContent=rows.length+" 项";
+      $("paneBody").innerHTML='<table><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>'+
+        rows.map(function(x){return '<tr><td class="mono">'+esc(x.key)+'</td><td class="mono">'+esc(x.value)+'</td></tr>';}).join("")+'</tbody></table>';
+    }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+
+  $("btnRefresh").onclick=function(){loadPane();};
+  $("filter").oninput=function(){
+    if(activeTab==="jobs")renderJobTree();
+    else if(activeTab==="messages")loadMessagesTree();
+    else if(activeTab==="taskmanagers")loadTMs();
+    else if(activeTab==="config")loadConfig();
+  };
+  boot();
+})();
+</script>
+</body>
+</html>

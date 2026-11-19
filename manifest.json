@@ -1,0 +1,274 @@
+{
+  "$schema": "https://dbx.local/schemas/plugin-manifest-1.json",
+  "manifest_version": 1,
+  "id": "local.flink.studio",
+  "name": "Flink Studio",
+  "version": "0.1.0",
+  "publisher": "local",
+  "description": "通用 Flink 客户端工作台：连接 JobManager REST API，实时查看集群概览、运行中作业与算子、TaskManager 指标与日志、集群配置；独家的「消费内容」页直接从 print-sink 日志解析 Kafka 消费记录，以表格呈现每条消息的操作类型与各字段。全链路只读，无需 SSH、无需数据库。",
+  "icon": "assets/plugin.svg",
+  "permissions": [
+    "host.workbench",
+    "host.storage",
+    "host.connections:read",
+    "host.events"
+  ],
+  "engines": {
+    "dbx": ">=0.5.68",
+    "host_api": "1"
+  },
+  "entrypoints": {
+    "backend": {
+      "executable": "bin/dbx-plugin-flink-studio",
+      "protocol_versions": [
+        1
+      ],
+      "transport": "stdio-jsonl"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "connection-provider",
+      "id": "local.flink.studio.connection",
+      "label": "Flink Studio (JobManager REST)",
+      "description": "连接 Flink JobManager REST API（默认 8081），只读查看作业与消费内容。",
+      "icon": "assets/connection.svg",
+      "database_type": "flink",
+      "workbench": "local.flink.studio.workbench",
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "Flink JobManager"
+        },
+        {
+          "key": "scheme",
+          "label": "Protocol",
+          "type": "select",
+          "binding": "config",
+          "default": "http",
+          "options": [
+            {
+              "label": "HTTP",
+              "value": "http"
+            },
+            {
+              "label": "HTTPS",
+              "value": "https"
+            }
+          ]
+        },
+        {
+          "key": "host",
+          "label": "JobManager host",
+          "type": "text",
+          "binding": "host",
+          "required": true,
+          "default": "localhost"
+        },
+        {
+          "key": "port",
+          "label": "REST port",
+          "type": "number",
+          "binding": "port",
+          "required": true,
+          "default": 8081
+        },
+        {
+          "key": "auth_type",
+          "label": "Authentication",
+          "type": "select",
+          "binding": "config",
+          "default": "none",
+          "options": [
+            {
+              "label": "None",
+              "value": "none"
+            },
+            {
+              "label": "Basic Authentication",
+              "value": "basic"
+            },
+            {
+              "label": "Bearer Token",
+              "value": "bearer"
+            }
+          ]
+        },
+        {
+          "key": "username",
+          "label": "Username",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "visible_when": {
+            "field": "auth_type",
+            "one_of": [
+              "basic"
+            ]
+          }
+        },
+        {
+          "key": "password",
+          "label": "Password",
+          "type": "password",
+          "binding": "secret",
+          "default": "",
+          "visible_when": {
+            "field": "auth_type",
+            "one_of": [
+              "basic"
+            ]
+          }
+        },
+        {
+          "key": "bearer_token",
+          "label": "Bearer token",
+          "type": "password",
+          "binding": "secret",
+          "default": "",
+          "visible_when": {
+            "field": "auth_type",
+            "one_of": [
+              "bearer"
+            ]
+          }
+        },
+        {
+          "key": "tls_verify",
+          "label": "Verify TLS certificate",
+          "type": "boolean",
+          "binding": "config",
+          "default": true,
+          "visible_when": {
+            "field": "scheme",
+            "one_of": [
+              "https"
+            ]
+          }
+        },
+        {
+          "key": "timeout_secs",
+          "label": "Request timeout (seconds)",
+          "type": "number",
+          "binding": "config",
+          "default": 12
+        },
+        {
+          "key": "max_body_mb",
+          "label": "Max log body (MB)",
+          "type": "number",
+          "binding": "config",
+          "default": 16
+        },
+        {
+          "key": "read_only",
+          "label": "Read-only mode",
+          "type": "boolean",
+          "binding": "config",
+          "default": true
+        }
+      ],
+      "actions": [
+        {
+          "id": "test",
+          "label": "Test Connection",
+          "variant": "outline",
+          "when": "always",
+          "requires_valid_form": true,
+          "timeout_ms": 15000
+        }
+      ]
+    },
+    {
+      "type": "workbench",
+      "id": "local.flink.studio.workbench",
+      "label": "Flink Studio",
+      "description": "Flink cluster & consumed-messages workbench.",
+      "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "context-menu",
+      "id": "local.flink.studio.open",
+      "label": "Open Flink Studio",
+      "menu": "connection",
+      "icon": "assets/plugin.svg",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "local.flink.studio.workbench"
+      }
+    },
+    {
+      "type": "command",
+      "id": "local.flink.studio.open.command",
+      "label": "Open Flink Studio",
+      "icon": "assets/plugin.svg",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "local.flink.studio.workbench",
+        "presentation": "tab"
+      }
+    },
+    {
+      "type": "menus",
+      "id": "local.flink.studio.menus",
+      "items": [
+        {
+          "location": "appSidebar",
+          "command": "local.flink.studio.open.command",
+          "group": "navigation",
+          "order": 55,
+          "default_visible": true
+        },
+        {
+          "location": "commandPalette",
+          "command": "local.flink.studio.open.command",
+          "group": "navigation",
+          "order": 55
+        }
+      ]
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "Flink Studio",
+      "description": "通用 Flink 客户端工作台：连接 JobManager REST API，实时查看集群概览、运行中作业与算子、TaskManager 指标与日志、集群配置；独家的「消费内容」页直接从 print-sink 日志解析 Kafka 消费记录，以表格呈现每条消息的操作类型与各字段。全链路只读，无需 SSH、无需数据库。",
+      "contributions": {
+        "local.flink.studio.connection": {
+          "label": "Flink Studio（JobManager REST）",
+          "description": "连接 Flink JobManager REST API（默认 8081），只读查看作业与消费内容。"
+        },
+        "local.flink.studio.workbench": {
+          "label": "Flink Studio",
+          "description": "Flink 集群与消费内容工作台。"
+        }
+      }
+    },
+    "en": {
+      "name": "Flink Studio",
+      "description": "A general-purpose Flink client workbench: connect to the JobManager REST API and inspect cluster overview, running jobs and operators, TaskManager metrics and logs, and cluster configuration. The unique \"Consumed Messages\" tab parses Kafka records straight from print-sink logs into a table with change type and every field. Fully read-only — no SSH, no database required.",
+      "contributions": {
+        "local.flink.studio.connection": {
+          "label": "Flink Studio (JobManager REST)",
+          "description": "Connect to a Flink JobManager REST API (port 8081 by default) to read jobs and consumed messages."
+        },
+        "local.flink.studio.workbench": {
+          "label": "Flink Studio",
+          "description": "Flink cluster and consumed-messages workbench."
+        }
+      }
+    }
+  }
+}

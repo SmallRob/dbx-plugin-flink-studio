@@ -1,0 +1,15 @@
+# 本地构建产物 / 验证截图
+bin/
+dist/
+_tmp/
+__pycache__/
+*.pyc
+
+# 本地部署脚本含 DBX 明文口令，禁止进入公开源码仓
+scripts/install_to_dbx.py
+scripts/ui_verify.mjs
+
+# 签名材料（本地私有）
+.signing/
+.dbx-dev/
+*.env
