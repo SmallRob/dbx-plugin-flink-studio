@@ -125,6 +125,18 @@ td.num{font-family:var(--mono);text-align:right}
 a{color:var(--primary)}
 .hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:7px 11px;border-radius:var(--radius);
   background:color-mix(in srgb,var(--primary) 7%,transparent);border:1px solid color-mix(in srgb,var(--primary) 18%,transparent);font-size:11px;color:var(--muted-foreground)}
+/* ---- job pipeline (operator chain) ---- */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:10px 12px;margin:10px 0;border:1px solid var(--border);border-radius:var(--radius);
+  background:color-mix(in srgb,var(--muted) 45%,transparent)}
+.flow .lbl{font-size:11px;color:var(--muted-foreground);margin-right:4px;font-family:var(--mono)}
+.flow .stage{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-family:var(--mono);
+  border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);background:color-mix(in srgb,var(--primary) 10%,transparent);color:var(--foreground)}
+.flow .stage.src{border-color:color-mix(in srgb,var(--success) 45%,transparent);background:color-mix(in srgb,var(--success) 10%,transparent)}
+.flow .stage.sink{border-color:color-mix(in srgb,var(--warning) 45%,transparent);background:color-mix(in srgb,var(--warning) 12%,transparent)}
+.flow .arr{color:var(--muted-foreground);font-weight:700}
+/* ---- ingestion metrics ---- */
+.metric-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0}
+.metric-cards .card .v{font-size:17px}
 </style>
 </head>
 <body>
@@ -275,18 +287,74 @@ a{color:var(--primary)}
     $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 加载作业详情…</div>';
     try{
       var j=await invoke("flink/job",Object.assign(connParams(),{jobId:id}));
-      var tasks=(j.vertices||[]).map(function(v){var m=(v.metrics||{})["read-bytes"];return [v.name,v.parallelism,v.status,m!=null?fmtBytes(m):"—"];});
+      var tasks=(j.vertices||[]).map(function(v){var m=(v.metrics||{})["read-bytes"];return [v.id,v.name,v.parallelism,v.status,m!=null?fmtBytes(m):"—"];});
+      // pipeline: each vertex name is the operator chain, e.g.
+      // "Source: KafkaSource-x -> Calc(...) -> Sink: Sink(...)"
+      function flow(v){
+        var stages=v.name.split("->").map(function(x){return x.trim();}).filter(Boolean);
+        var cls=function(s){if(/^Source/.test(s))return " src";if(/Sink/.test(s))return " sink";return "";};
+        return '<div class="flow"><span class="lbl">并行度 '+(v.parallelism!=null?v.parallelism:"?")+'</span>'+
+          stages.map(function(s,i){return (i?'<span class="arr">→</span>':'')+'<span class="stage'+cls(s)+'" title="'+esc(s)+'">'+esc(s.length>46?s.slice(0,46)+"…":s)+'</span>';}).join("")+'</div>';
+      }
       $("paneBody").innerHTML=
         '<div class="grid cards">'+
           '<div class="card"><div class="k">状态</div><div class="v"><span class="state '+esc(j.state)+'">'+esc(j.state)+'</span></div></div>'+
           '<div class="card"><div class="k">启动时间</div><div class="v" style="font-size:14px">'+esc(fmtTime(j["start-time"]||j.startTime))+'</div></div>'+
           '<div class="card"><div class="k">Job ID</div><div class="v" style="font-size:13px">'+esc(id)+'</div></div>'+
         '</div>'+
+        '<h3 class="section-title">算子链</h3>'+
+        (j.vertices||[]).map(function(v){return flow(v);}).join("")+
+        '<h3 class="section-title">摄入指标</h3><div id="ingest"><div class="empty" style="padding:14px"><span class="spin"></span> 拉取指标…</div></div>'+
         '<h3 class="section-title">算子 / 顶点</h3>'+
         '<table><thead><tr><th>名称</th><th>并行度</th><th>状态</th><th>读取字节</th></tr></thead><tbody>'+
-        tasks.map(function(t){return '<tr><td>'+esc(t[0])+'</td><td>'+esc(t[1])+'</td><td>'+esc(t[2])+'</td><td class="num">'+esc(t[3])+'</td></tr>';}).join("")+
+        tasks.map(function(t){return '<tr><td title="'+esc(t[1])+'">'+esc(t[1].length>60?t[1].slice(0,60)+"…":t[1])+'</td><td>'+esc(t[2])+'</td><td>'+esc(t[3])+'</td><td class="num">'+esc(t[4])+'</td></tr>';}).join("")+
         '</tbody></table>';
+      loadIngestMetrics(id,j.vertices||[]);
     }catch(e){$("paneBody").innerHTML='<div class="err">'+esc(e&&e.message||e)+'</div>';}
+  }
+  // Aggregated per-vertex metrics: Kafka topic/partition offsets, bytes consumed
+  // from Kafka, and record counts through the operator chain.
+  // Flink returns metric ids without values first; values need a second ?get= call.
+  async function loadIngestMetrics(jid,vertices){
+    var el=$("ingest");if(!el)return;
+    var sum=function(list,re){var t=0;list.forEach(function(m){if(re.test(m.id)){var v=Number(m.value);if(isFinite(v))t+=v;}});return t;};
+    var hasKafka=false,html="";
+    try{
+      // step 1: available metric ids per vertex
+      var r1=await invoke("flink/batch",Object.assign(connParams(),{requests:(vertices||[]).map(function(v){return {path:"/jobs/"+jid+"/vertices/"+v.id+"/metrics"};})}));
+      var wants=[];
+      (r1.results||[]).forEach(function(list,vi){
+        if(!Array.isArray(list))return;
+        var ids=list.map(function(m){return m.id||"";}).filter(function(id){
+          return /KafkaSourceReader\.topic\..*\.(currentOffset|committedOffset)$/.test(id)||/KafkaConsumer\.bytes-consumed-total$/.test(id)||/Source__[^.]*\.numRecordsOut$/.test(id)||/^[^.]*\.numRecordsOut$/.test(id);
+        });
+        if(ids.length)wants.push({vi:vi,vid:vertices[vi].id,ids:ids});
+      });
+      if(!wants.length){el.innerHTML='<div class="small" style="padding:4px 0">未发现 Kafka Source 指标（作业可能不是 Kafka 源）。</div>';return;}
+      // step 2: fetch values
+      var r2=await invoke("flink/batch",Object.assign(connParams(),{requests:wants.map(function(w){return {path:"/jobs/"+jid+"/vertices/"+w.vid+"/metrics",query:{get:w.ids}};})}));
+      (r2.results||[]).forEach(function(list,bi){
+        if(!Array.isArray(list)||!list.length)return;
+        var off={};
+        list.forEach(function(m){
+          var mm=(m.id||"").match(/KafkaSourceReader\.topic\.([^.]+)\.partition\.(\d+)\.(currentOffset|committedOffset)$/);
+          if(mm){hasKafka=true;var k=mm[1]+"#"+mm[2];off[k]=off[k]||{topic:mm[1],part:mm[2]};off[k][mm[3]]=m.value;}
+        });
+        if(hasKafka&&!html){
+          var consumed=sum(list,/KafkaConsumer\.bytes-consumed-total$/);
+          var srcOut=sum(list,/Source__[^.]*\.numRecordsOut$/);
+          var chainOut=sum(list,/^[^.]*\.numRecordsOut$/);
+          var rows=Object.keys(off).sort().map(function(k){var o=off[k];return '<tr><td class="mono">'+esc(o.topic)+'</td><td class="num">'+esc(o.part)+'</td><td class="num">'+esc(o.currentOffset!=null?o.currentOffset:"—")+'</td><td class="num">'+esc(o.committedOffset!=null?o.committedOffset:"—")+'</td></tr>';}).join("");
+          html+='<div class="metric-cards">'+
+            '<div class="card"><div class="k">Kafka 摄入字节</div><div class="v">'+fmtBytes(consumed)+'</div></div>'+
+            '<div class="card"><div class="k">Source 读出记录</div><div class="v">'+srcOut+'</div></div>'+
+            '<div class="card"><div class="k">算子链输出记录</div><div class="v">'+chainOut+'</div></div>'+
+          '</div>'+
+          (rows?'<table><thead><tr><th>Topic</th><th>分区</th><th>当前位点</th><th>已提交位点</th></tr></thead><tbody>'+rows+'</tbody></table>':"");
+        }
+      });
+    }catch(e){html='<div class="err">指标加载失败：'+esc(e&&e.message||e)+'</div>';}
+    el.innerHTML=html||(hasKafka?"":'');
   }
 
   var tmCache=[];
@@ -352,9 +420,15 @@ a{color:var(--primary)}
       var r=await invoke("flink/messages",p);
       var rows=r.rows||[];
       $("paneMeta").textContent=(selectedTM||"全部 TM")+" · "+r.total+" 行 / 扫描 "+r.filesScanned+" 个日志文件";
-      if(!rows.length){$("paneBody").innerHTML='<div class="empty"><div class="mark">▤</div>未发现 print-sink 消费记录。<br/><span class="small">在 Flink SQL 中使用 <span class="mono">INSERT INTO sink_print SELECT …</span>（print connector）后，消费结果会写入 TaskManager stdout，插件在此读取。</span></div>';return;}
+      var hints=(r&&r.hints)||{};
+      var chain=[];
+      if((hints.bootstrapServers||[]).length)chain.push('Kafka <span class="mono">'+esc(hints.bootstrapServers.join(","))+'</span>');
+      if((hints.sourceTables||[]).length)chain.push('源表 <span class="mono">'+esc(hints.sourceTables.join(","))+'</span>');
+      if((hints.topics||[]).length)chain.push('topic <span class="mono">'+esc(hints.topics.join(","))+'</span>');
+      var hintHtml=chain.length?'<div class="hint" style="margin:0 0 12px">◈ 消费链路：'+chain.join(' → ')+'<span class="small">（来自 TM 日志，topic 名以作业页摄入指标为准）</span></div>':"";
+      if(!rows.length){$("paneBody").innerHTML=hintHtml+'<div class="empty"><div class="mark">▤</div>未发现 print-sink 消费记录。<br/><span class="small">在 Flink SQL 中使用 <span class="mono">INSERT INTO sink_print SELECT …</span>（print connector）后，消费结果会写入 TaskManager stdout，插件在此读取。</span></div>';return;}
       var maxCells=rows.reduce(function(m,x){return Math.max(m,x.cells.length);},0);
-      $("paneBody").innerHTML='<table><thead><tr><th>操作</th>'+Array.apply(null,Array(maxCells)).map(function(_,i){return '<th>列 '+(i+1)+'</th>';}).join("")+'<th>TaskManager</th></tr></thead><tbody>'+
+      $("paneBody").innerHTML=hintHtml+'<table><thead><tr><th>操作</th>'+Array.apply(null,Array(maxCells)).map(function(_,i){return '<th>列 '+(i+1)+'</th>';}).join("")+'<th>TaskManager</th></tr></thead><tbody>'+
         rows.map(function(row){
           var opCls=row.op==="+I"?"add":(row.op==="+U"||row.op==="-U")?"upd":"del";
           return '<tr><td><span class="op '+opCls+'">'+esc(row.op)+'</span></td>'+

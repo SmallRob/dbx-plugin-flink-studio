@@ -194,6 +194,31 @@ func (h *Handler) logfile(lc json.RawMessage, p callParams) (any, *dbxpluginsdk.
 // rowRe matches print-sink changelog rows such as: +I[2249, 成都, 显示器, 680.36]
 var rowRe = regexp.MustCompile(`(?m)([+\-]I|[+\-]U|D)\s*\[([^\]\r\n]*)\]`)
 
+// Kafka lineage hints found in TaskManager .log files. The real topic name
+// usually only appears in JobManager logs (not reachable via REST), so these
+// hints are best-effort: broker address, explicit topics, and the source table
+// from the KafkaSource operator name.
+var (
+	bootstrapRe = regexp.MustCompile(`(?m)bootstrap\.servers\s*=\s*\[([^\]\r\n]+)\]`)
+	topicsRe    = regexp.MustCompile(`(?mi)topics?\s*[:=]\s*\[([^\]\r\n]+)\]`)
+	kafkaSrcRe  = regexp.MustCompile(`KafkaSource-([A-Za-z0-9_.\-]+)`)
+	logScanMax  = int64(8 << 20) // skip hint scanning for very large log files
+)
+
+// scanLogHints extracts Kafka lineage hints from one .log file body.
+func scanLogHints(content string, servers, topics, tables map[string]bool) {
+	for _, m := range bootstrapRe.FindAllStringSubmatch(content, -1) {
+		for _, s := range strings.Split(m[1], ",") { servers[strings.TrimSpace(s)] = true }
+	}
+	for _, m := range topicsRe.FindAllStringSubmatch(content, -1) {
+		for _, t := range strings.Split(m[1], ",") { topics[strings.TrimSpace(t)] = true }
+	}
+	for _, m := range kafkaSrcRe.FindAllStringSubmatch(content, -1) {
+		parts := strings.Split(m[1], ".")
+		tables[parts[len(parts)-1]] = true
+	}
+}
+
 // messages scans all TaskManager .out logs for print-sink rows and parses them.
 func (h *Handler) messages(lc json.RawMessage, p callParams) (any, *dbxpluginsdk.PluginError) {
 	s, perr := h.session(lc, p.ConnectionID)
@@ -219,19 +244,31 @@ func (h *Handler) messages(lc json.RawMessage, p callParams) (any, *dbxpluginsdk
 	}
 	rows := []row{}
 	filesScanned := 0
+	servers := map[string]bool{}
+	topics := map[string]bool{}
+	tables := map[string]bool{}
 	for _, tm := range tms {
 		status, body, _, err := s.Do(ctx, http.MethodGet, "/taskmanagers/"+pathEscape(tm)+"/logs", nil)
 		if err != nil || status < 200 || status >= 300 { continue }
 		var lr struct{ Logs []struct{ Name string `json:"name"`; Size int64 `json:"size"` } `json:"logs"` }
 		_ = json.Unmarshal(body, &lr)
 		for _, lf := range lr.Logs {
-			if !strings.HasSuffix(lf.Name, ".out") || lf.Size == 0 { continue }
-			filesScanned++
-			_, content, _, err := s.Do(ctx, http.MethodGet, "/taskmanagers/"+pathEscape(tm)+"/logs/"+pathEscape(lf.Name), nil)
-			if err != nil { continue }
-			for _, m := range rowRe.FindAllStringSubmatch(string(content), -1) {
-				cells := splitCells(m[2])
-				rows = append(rows, row{Op: m[1], Cells: cells, TM: tm, File: lf.Name})
+			if lf.Size == 0 { continue }
+			if strings.HasSuffix(lf.Name, ".out") {
+				filesScanned++
+				_, content, _, err := s.Do(ctx, http.MethodGet, "/taskmanagers/"+pathEscape(tm)+"/logs/"+pathEscape(lf.Name), nil)
+				if err != nil { continue }
+				for _, m := range rowRe.FindAllStringSubmatch(string(content), -1) {
+					cells := splitCells(m[2])
+					rows = append(rows, row{Op: m[1], Cells: cells, TM: tm, File: lf.Name})
+				}
+				continue
+			}
+			// .log files carry Kafka lineage hints (broker / topics / source table).
+			if strings.Contains(lf.Name, ".log") && lf.Size <= logScanMax {
+				_, content, _, err := s.Do(ctx, http.MethodGet, "/taskmanagers/"+pathEscape(tm)+"/logs/"+pathEscape(lf.Name), nil)
+				if err != nil { continue }
+				scanLogHints(string(content), servers, topics, tables)
 			}
 		}
 	}
@@ -242,7 +279,16 @@ func (h *Handler) messages(lc json.RawMessage, p callParams) (any, *dbxpluginsdk
 	return map[string]any{
 		"rows": rows, "total": len(rows), "filesScanned": filesScanned,
 		"taskManagers": len(tms), "note": "rows parsed from Flink print-sink TaskManager stdout logs",
+		"hints": map[string]any{
+			"bootstrapServers": keysOf(servers), "topics": keysOf(topics), "sourceTables": keysOf(tables),
+		},
 	}, nil
+}
+
+func keysOf(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for k := range set { out = append(out, k) }
+	return out
 }
 
 // splitCells splits a print-sink row body on commas not inside quotes/brackets.
