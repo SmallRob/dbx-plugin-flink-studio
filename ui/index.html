@@ -123,8 +123,6 @@ td.num{font-family:var(--mono);text-align:right}
 .mono{font-family:var(--mono)}
 .small{color:var(--muted-foreground);font-size:11px}
 a{color:var(--primary)}
-select.conn-sel{max-width:220px;padding:5px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--muted);outline:none}
-select.conn-sel:focus{border-color:var(--primary)}
 .hint{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:7px 11px;border-radius:var(--radius);
   background:color-mix(in srgb,var(--primary) 7%,transparent);border:1px solid color-mix(in srgb,var(--primary) 18%,transparent);font-size:11px;color:var(--muted-foreground)}
 </style>
@@ -132,7 +130,6 @@ select.conn-sel:focus{border-color:var(--primary)}
 <body>
 <div class="app">  <div class="toolbar">
     <div class="brand"><span class="logo">FL</span><span>Flink Studio</span></div>
-    <select id="connSel" class="conn-sel" title="选择连接"></select>
     <span class="conn-pill"><span id="connDot" class="dot off"></span><span id="connAddr">未连接</span></span>
     <span class="badge ro">只读</span>
     <span class="badge rest">REST</span>
@@ -220,16 +217,12 @@ select.conn-sel:focus{border-color:var(--primary)}
     if(!window.dbxPlugin){$("paneBody").innerHTML='<div class="err">未检测到 DBX 宿主桥接。请在插件中心打开工作台。</div>';return;}
     bridge=window.dbxPlugin;
     await bridge.ready;
+    // One connection per workbench instance: connId comes from the host context only.
+    connId=(bridge.context||{}).connectionId||"";
     try{conns=await bridge.getConnections();}catch(e){conns=[];}
     if(!Array.isArray(conns))conns=[];
-    var ctx=bridge.context||{};
-    connId=ctx.connectionId||(conns[0]&&conns[0].id)||"";
-    var sel=$("connSel");
-    sel.innerHTML=conns.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name||c.id)+'</option>';}).join("")||'<option value="'+esc(connId)+'">'+esc(connId||"当前连接")+'</option>';
-    sel.value=connId;
-    sel.onchange=function(){connId=sel.value;selectedJob="";selectedTM="";selectedLog="";overview=null;setConnLabel();loadPane();};
     setConnLabel();
-    bridge.onContext(function(c){if(c&&c.connectionId&&c.connectionId!==connId){connId=c.connectionId;sel.value=connId;setConnLabel();loadPane();}});
+    bridge.onContext(function(c){if(c&&c.connectionId&&c.connectionId!==connId){connId=c.connectionId;selectedJob="";selectedTM="";selectedLog="";overview=null;setConnLabel();loadPane();}});
     try{var info=await invoke("flink/ping",{});$("ver").textContent="sidecar "+(info.plugin||"");}catch(e){}
     renderTabs();switchTab("overview");
   })().catch(function(e){$("paneBody").innerHTML='<div class="err">初始化失败：'+esc(e&&e.message||e)+'</div>';});}
