@@ -128,7 +128,7 @@ python scripts/smoke_test.py --bin <sidecar> --host <jobmanager-host> --port 808
 
 ## 版本同步
 
-`manifest.json.version` == `backend/main.go` 的 `pluginVersion`（当前 0.1.0）。`check-manifest.py` 强制断言。升级时两处同改。
+`manifest.json.version` == `backend/main.go` 的 `pluginVersion`（当前 0.1.1）。`check-manifest.py` 强制断言。升级时两处同改。
 
 ## 安全
 

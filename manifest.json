@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "local.flink.studio",
   "name": "Flink Studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "smallrob",
   "description": "通用 Flink 客户端工作台：连接 JobManager REST API，实时查看集群概览、运行中作业与算子、TaskManager 指标与日志、集群配置；独家的「消费内容」页直接从 print-sink 日志解析 Kafka 消费记录，以表格呈现每条消息的操作类型与各字段。全链路只读，无需 SSH、无需数据库。",
   "icon": "assets/plugin.svg",

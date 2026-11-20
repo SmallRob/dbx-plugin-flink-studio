@@ -121,7 +121,12 @@ func (h *Handler) test(lc json.RawMessage, p callParams) (any, *dbxpluginsdk.Plu
 	overview, err := s.Ping(context.Background())
 	if err != nil { return nil, dbxpluginsdk.NewError(-32000, err.Error()) }
 	return map[string]any{
-		"ok": true, "endpoint": s.Endpoint,
+		// success/ok/message keep the result compatible with DBX's connection
+		// dialog, which requires a `message` field in the test result.
+		"success":      true,
+		"ok":           true,
+		"message":      "Connected to Flink JobManager REST at " + s.Endpoint,
+		"endpoint":     s.Endpoint,
 		"flinkVersion": overview["flink-version"],
 		"taskmanagers": overview["taskmanagers"],
 		"jobsRunning":  overview["jobs-running"],
