@@ -58,7 +58,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
   background:color-mix(in srgb,var(--muted) 40%,transparent)}
 .tab{position:relative;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border:0;border-bottom:2px solid transparent;
   background:transparent;color:var(--muted-foreground);cursor:pointer;white-space:nowrap;transition:color .15s,background .15s}
-.tab:hover{color:var(--foreground);background:var(--accent)}
+.tab:hover{color:var(--foreground);background:color-mix(in srgb,var(--foreground) 7%,transparent)}
 .tab.active{color:var(--foreground);font-weight:650}
 .tab.active:after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;
   background:linear-gradient(90deg,#fb923c,#38bdf8,#a78bfa)}
@@ -73,8 +73,8 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .filter:focus{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 15%,transparent)}
 .tree-list{overflow:auto;flex:1;padding:0 6px 8px}
 .tree-item{display:flex;align-items:center;gap:8px;padding:7px 9px;margin:2px 0;border-radius:var(--radius);cursor:pointer;color:var(--muted-foreground);transition:all .12s}
-.tree-item:hover{background:var(--accent);color:var(--foreground)}
-.tree-item.active{background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 20%,var(--accent)),color-mix(in srgb,var(--primary) 8%,var(--accent)));
+.tree-item:hover{background:color-mix(in srgb,var(--foreground) 7%,transparent);color:var(--foreground)}
+.tree-item.active{background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 20%,var(--muted)),color-mix(in srgb,var(--primary) 8%,var(--muted)));
   color:var(--foreground);border-left:2px solid var(--primary);padding-left:7px}
 .tree-item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .pill{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid var(--border);color:var(--muted-foreground)}
@@ -103,7 +103,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;border:1px solid var(--
 th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
 th{color:var(--muted-foreground);font-weight:650;position:sticky;top:0;z-index:1;letter-spacing:.2px;
   background:linear-gradient(180deg,color-mix(in srgb,var(--primary) 9%,var(--background)),var(--background))}
-tr:hover td{background:color-mix(in srgb,var(--primary) 7%,var(--accent))}
+tr:hover td{background:color-mix(in srgb,var(--primary) 7%,var(--muted))}
 td.num{font-family:var(--mono);text-align:right}
 .op{font-family:var(--mono);font-weight:750;padding:2px 6px;border-radius:5px;font-size:11px;letter-spacing:.3px}
 .op.add{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);border:1px solid color-mix(in srgb,var(--success) 28%,transparent)}
@@ -130,8 +130,7 @@ select.conn-sel:focus{border-color:var(--primary)}
 </style>
 </head>
 <body>
-<div class="app">
-  <div class="toolbar">
+<div class="app">  <div class="toolbar">
     <div class="brand"><span class="logo">FL</span><span>Flink Studio</span></div>
     <select id="connSel" class="conn-sel" title="选择连接"></select>
     <span class="conn-pill"><span id="connDot" class="dot off"></span><span id="connAddr">未连接</span></span>
@@ -154,6 +153,27 @@ select.conn-sel:focus{border-color:var(--primary)}
     </main>
   </div>
 </div>
+<script>
+/* host theme follow: set color-scheme by sampling host --color-background luminance */
+(function(){
+  "use strict";
+  function apply(){
+    var probe=document.createElement("div");
+    probe.style.cssText="position:absolute;display:none;background:var(--color-background,#131416)";
+    document.body.appendChild(probe);
+    var rgb=getComputedStyle(probe).backgroundColor;
+    document.body.removeChild(probe);
+    var m=rgb&&rgb.match(/[\d.]+/g);
+    if(!m)return;
+    var lum=(0.299*m[0]+0.587*m[1]+0.114*m[2])/255;
+    document.documentElement.style.colorScheme=lum<0.5?"dark":"light";
+  }
+  apply();
+  window.addEventListener("dbx-plugin-env",apply);
+  if(window.dbxPlugin&&window.dbxPlugin.onEvent){try{window.dbxPlugin.onEvent("dbx-plugin-env",apply);}catch(e){}}
+  setInterval(apply,1500);
+})();
+</script>
 <script>
 (function(){
   "use strict";
