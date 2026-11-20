@@ -14,7 +14,7 @@ import (
 
 const (
 	pluginID      = "local.flink.studio"
-	pluginVersion = "0.1.1" // Keep in sync with manifest.json (check-manifest.py asserts).
+	pluginVersion = "0.1.2" // Keep in sync with manifest.json (check-manifest.py asserts).
 )
 
 func main() {
