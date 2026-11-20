@@ -306,9 +306,10 @@ a{color:var(--primary)}
   async function showTM(id){
     $("paneMeta").textContent=esc(id);
     var t=tmCache.filter(function(x){return x.id===id;})[0]||{};
+    var hb = t.timeSinceLastHeartbeat!=null ? Math.round(Number(t.timeSinceLastHeartbeat)/1000)+"s 前" : (t.lastHeartbeat?fmtTime(t.lastHeartbeat):"—");
     $("paneBody").innerHTML='<div class="grid cards">'+
       [["Slots",t.slotsNumber??"—"],["空闲 Slots",t.freeSlots??"—"],["CPU 核数",(t.hardware&&t.hardware.cpuCores)??"—"],
-       ["总内存",fmtBytes(t.hardware&&t.hardware.physicalMemory)],["管理内存",fmtBytes(t.hardware&&t.hardware.managedMemory)],["最后心跳",fmtTime(t.lastHeartbeat)]]
+       ["总内存",fmtBytes(t.hardware&&t.hardware.physicalMemory)],["管理内存",fmtBytes(t.hardware&&t.hardware.managedMemory)],["最后心跳",hb]]
       .map(function(c){return '<div class="card"><div class="k">'+esc(c[0])+'</div><div class="v" style="font-size:16px">'+esc(c[1])+'</div></div>';}).join("")+'</div>';
     try{
       var lr=await invoke("flink/taskmanager-logs",Object.assign(connParams(),{taskManager:id}));
