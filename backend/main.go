@@ -18,6 +18,7 @@ const (
 )
 
 func main() {
+	transport.Version = pluginVersion
 	manager := connection.NewManager()
 	handler := transport.NewHandler(manager)
 	server := dbxpluginsdk.NewServer(dbxpluginsdk.Metadata{

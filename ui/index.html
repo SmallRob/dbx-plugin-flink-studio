@@ -223,7 +223,7 @@ a{color:var(--primary)}
     if(!Array.isArray(conns))conns=[];
     setConnLabel();
     bridge.onContext(function(c){if(c&&c.connectionId&&c.connectionId!==connId){connId=c.connectionId;selectedJob="";selectedTM="";selectedLog="";overview=null;setConnLabel();loadPane();}});
-    try{var info=await invoke("flink/ping",{});$("ver").textContent="sidecar "+(info.plugin||"");}catch(e){}
+    try{var info=await invoke("flink/ping",{});$("ver").textContent="v"+(info&&info.version||"?");}catch(e){}
     renderTabs();switchTab("overview");
   })().catch(function(e){$("paneBody").innerHTML='<div class="err">初始化失败：'+esc(e&&e.message||e)+'</div>';});}
 

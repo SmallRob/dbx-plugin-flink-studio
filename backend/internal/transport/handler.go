@@ -18,6 +18,9 @@ import (
 
 const pluginID = "local.flink.studio"
 
+// Version is set by main so flink/ping can report the plugin version.
+var Version = ""
+
 // Handler satisfies dbxpluginsdk.Handler.
 type Handler struct{ manager *connection.Manager }
 
@@ -52,7 +55,7 @@ func (h *Handler) Handle(
 
 	switch method {
 	case "flink/ping":
-		return map[string]any{"pong": true, "plugin": pluginID}, nil
+		return map[string]any{"pong": true, "plugin": pluginID, "version": Version}, nil
 
 	case "flink/test", "connection/test":
 		return h.test(lc, p)
