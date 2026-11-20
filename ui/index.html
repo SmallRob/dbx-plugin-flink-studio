@@ -187,7 +187,7 @@ a{color:var(--primary)}
 
   function invoke(method,params){ if(!bridge) return Promise.reject(new Error("NOT_IN_DBX_HOST")); return bridge.invoke(method,params||{},{timeoutMs:30000}); }
   function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
-  function fmtBytes(n){n=Number(n)||0;if(n<1024)return n+" B";var u=["KB","MB","GB","TB"],i=-1;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(1)+" "+u[i];}
+  function fmtBytes(n){n=Number(n);if(!n)return "—";if(n<1024)return n+" B";var u=["KB","MB","GB","TB"],i=-1;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(1)+" "+u[i];}
   function fmtTime(ms){if(!ms)return "—";try{return new Date(Number(ms)).toLocaleString("zh-CN",{hour12:false});}catch(e){return String(ms);}}
 
   function renderTabs(){
@@ -267,7 +267,7 @@ a{color:var(--primary)}
     var q=($("filter").value||"").toLowerCase();
     var rows=jobsCache.filter(function(j){return !q||String(j.id).toLowerCase().indexOf(q)>=0;});
     $("treeCount").textContent=rows.length+"/"+jobsCache.length;
-    $("treeList").innerHTML=rows.map(function(j){return '<div class="tree-item'+(j.id===selectedJob?" active":"")+'" data-job="'+esc(j.id)+'"><span class="name" title="'+esc(j.id)+'">'+esc(j.id.slice(0,12))+'…</span><span class="state '+esc(j.status)+'">'+esc(j.status)+'</span></div>';}).join("")||'<div class="empty">无作业</div>';
+    $("treeList").innerHTML=rows.map(function(j){var nm=esc(j.id.slice(0,12));if(j.id.length>12)nm+="…";return '<div class="tree-item'+(j.id===selectedJob?" active":"")+'" data-job="'+esc(j.id)+'"><span class="name" title="'+esc(j.id)+'">'+nm+'</span><span class="state '+esc(j.status)+'">'+esc(j.status)+'</span></div>';}).join("")||'<div class="empty">无作业</div>';
     Array.prototype.forEach.call($("treeList").querySelectorAll("[data-job]"),function(el){el.onclick=function(){selectedJob=el.dataset.job;renderJobTree();showJob(selectedJob);};});
   }
   async function showJob(id){
@@ -275,7 +275,7 @@ a{color:var(--primary)}
     $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 加载作业详情…</div>';
     try{
       var j=await invoke("flink/job",Object.assign(connParams(),{jobId:id}));
-      var tasks=(j.vertices||[]).map(function(v){return [v.name,v.parallelism,v.status,(v.metrics&&v.metrics["read-bytes"])||"0"];});
+      var tasks=(j.vertices||[]).map(function(v){var m=(v.metrics||{})["read-bytes"];return [v.name,v.parallelism,v.status,m!=null?fmtBytes(m):"—"];});
       $("paneBody").innerHTML=
         '<div class="grid cards">'+
           '<div class="card"><div class="k">状态</div><div class="v"><span class="state '+esc(j.state)+'">'+esc(j.state)+'</span></div></div>'+
@@ -307,8 +307,8 @@ a{color:var(--primary)}
     $("paneMeta").textContent=esc(id);
     var t=tmCache.filter(function(x){return x.id===id;})[0]||{};
     $("paneBody").innerHTML='<div class="grid cards">'+
-      [["Slots",t.totalSlots??"—"],["空闲 Slots",t.freeSlots??"—"],["CPU 核数",t.cpuCores??"—"],
-       ["总内存",fmtBytes(t.memoryTotal)],["JVM 堆已用",fmtBytes(t.heapUsed)],["最后心跳",fmtTime(t.lastHeartbeat)]]
+      [["Slots",t.slotsNumber??"—"],["空闲 Slots",t.freeSlots??"—"],["CPU 核数",(t.hardware&&t.hardware.cpuCores)??"—"],
+       ["总内存",fmtBytes(t.hardware&&t.hardware.physicalMemory)],["管理内存",fmtBytes(t.hardware&&t.hardware.managedMemory)],["最后心跳",fmtTime(t.lastHeartbeat)]]
       .map(function(c){return '<div class="card"><div class="k">'+esc(c[0])+'</div><div class="v" style="font-size:16px">'+esc(c[1])+'</div></div>';}).join("")+'</div>';
     try{
       var lr=await invoke("flink/taskmanager-logs",Object.assign(connParams(),{taskManager:id}));
@@ -340,10 +340,12 @@ a{color:var(--primary)}
   }
   async function showMessages(){
     $("paneMeta").textContent=selectedTM||"全部 TM";
-    $("paneActions").innerHTML='<label class="small">条数 <select id="limitSel"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select></label>';
+    // Preserve the chosen limit across re-renders (select is rebuilt each time).
+    var prevLimit=($("limitSel")&&$("limitSel").value)||"200";
+    $("paneActions").innerHTML='<label class="small">条数 <select id="limitSel">'+[100,200,500,1000].map(function(n){return '<option value="'+n+'"'+(String(n)===prevLimit?" selected":"")+'>'+n+'</option>';}).join("")+'</select></label>';
     $("paneBody").innerHTML='<div class="empty"><span class="spin"></span> 扫描 print-sink 日志…</div>';
     try{
-      var limit=parseInt(($("limitSel")&&$("limitSel").value)||"200",10);
+      var limit=parseInt(prevLimit,10)||200;
       var p=Object.assign(connParams(),{limit:limit});
       if(selectedTM)p.taskManager=selectedTM;
       var r=await invoke("flink/messages",p);
@@ -353,7 +355,7 @@ a{color:var(--primary)}
       var maxCells=rows.reduce(function(m,x){return Math.max(m,x.cells.length);},0);
       $("paneBody").innerHTML='<table><thead><tr><th>操作</th>'+Array.apply(null,Array(maxCells)).map(function(_,i){return '<th>列 '+(i+1)+'</th>';}).join("")+'<th>TaskManager</th></tr></thead><tbody>'+
         rows.map(function(row){
-          var opCls=row.op.indexOf("+I")>=0?"add":row.op.indexOf("+U")>=0?"upd":row.op.indexOf("-D")>=0?"del":"upd";
+          var opCls=row.op==="+I"?"add":(row.op==="+U"||row.op==="-U")?"upd":"del";
           return '<tr><td><span class="op '+opCls+'">'+esc(row.op)+'</span></td>'+
             Array.apply(null,Array(maxCells)).map(function(_,i){return '<td>'+esc(row.cells[i]||"")+'</td>';}).join("")+
             '<td class="small">'+esc(String(row.taskManager||"").slice(0,18))+'</td></tr>';
